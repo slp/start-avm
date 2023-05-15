@@ -39,8 +39,15 @@ else
  -device virtio-gpu-pci,xres=720,yres=1280"
 fi
 
-qemu-system-x86_64 -name guest=cvd-1,debug-threads=on \
- -machine pc,nvdimm=on,accel=kvm,usb=off,dump-guest-core=off \
+ARCH=`uname -m`
+if [ $ARCH == "x86_64" ]; then
+	MACHINE="pc"
+else
+	MACHINE="virt"
+fi
+
+qemu-system-${ARCH} -name guest=cvd-1,debug-threads=on \
+ -machine $MACHINE,nvdimm=on,accel=kvm,usb=off,dump-guest-core=off \
  -m size=4096M,maxmem=4102M,slots=2 -overcommit mem-lock=off -smp 2,cores=2,threads=1 \
  -no-user-config -nodefaults -no-shutdown -rtc base=utc -boot strict=on \
  $GPU \
@@ -91,6 +98,6 @@ qemu-system-x86_64 -name guest=cvd-1,debug-threads=on \
  -cpu host -msg timestamp=on \
  -device vhost-vsock-pci-non-transitional,guest-cid=3 \
  -device AC97 -device qemu-xhci,id=xhci \
- -bios ${CVD_BASE_DIR}/etc/bootloader_x86_64/bootloader.qemu
+ -bios ${CVD_BASE_DIR}/etc/bootloader_${ARCH}/bootloader.qemu
 
 kill $TOOLS_PID
