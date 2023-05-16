@@ -1,20 +1,41 @@
 #!/bin/bash
 
 DRM=0
+MT=0
 
-if [ $# == 1 ]; then
-    CVD_BASE_DIR=$1
-elif [ $# == 2 ]; then
-    if [ $1 == "--drm" ]; then
-        DRM=1
-    else
-        echo "Invalid option"
-        exit
-    fi
-    CVD_BASE_DIR=$2
-else
-    echo "Usage: $0 [--drm] ANDROID_BASE_DIR"
-    exit
+function print_usage {
+    echo "Usage: $0 [OPTIONS] <ANDROID_BASE_DIR>"
+    echo "Options:"
+    echo "  -v          Enable virgl GPU acceleration"
+    echo "  -m          Use virtio-multitouch as input device"
+    exit -1
+}
+
+while getopts ":vm" options; do
+    case "${options}" in
+        v)
+            DRM=1
+            ;;
+        m)
+            MT=1
+            ;;
+        :)
+            echo "Error: -${OPTARG} requires an argument."
+            print_usage
+            ;;
+        *)
+            print_usage
+            ;;
+    esac
+done
+
+CVD_BASE_DIR=${@:$OPTIND:1}
+
+if [ -z "${CVD_BASE_DIR}" ]; then
+    print_usage
+elif [ ! -e ${CVD_BASE_DIR} ]; then
+    echo "Directory ${CVD_BASE_DIR} doesn't exist or can't be accessed"
+    exit -1
 fi
 
 AVM_BASE_DIR=`dirname $0`
@@ -39,6 +60,12 @@ else
     GPU=" -display gtk -nodefaults -no-user-config \
  -device virtio-gpu-pci,xres=720,yres=1280"
     PROPERTIES="properties.img"
+fi
+
+if [ $MT == 1 ]; then
+    INPUT="virtio-multitouch-pci"
+else
+    INPUT="virtio-mouse-pci"
 fi
 
 ARCH=`uname -m`
@@ -91,7 +118,7 @@ qemu-system-${ARCH} -name guest=cvd-1,debug-threads=on \
  -device virtio-blk-pci-non-transitional,scsi=off,drive=drive-virtio-disk1,id=virtio-disk1 \
  -object rng-random,id=objrng0,filename=/dev/urandom \
  -device virtio-rng-pci-non-transitional,rng=objrng0,id=rng0,max-bytes=1024,period=2000 \
- -device virtio-mouse-pci,disable-legacy=on \
+ -device ${INPUT},disable-legacy=on \
  -device virtio-keyboard-pci,disable-legacy=on \
  -device virtio-keyboard-pci,disable-legacy=on \
  -device virtio-balloon-pci-non-transitional,id=balloon0 \
