@@ -30,20 +30,22 @@ fi
 
 if [ $DRM == 1 ]; then
     /usr/libexec/vhost-user-gpu -s /tmp/vgpu.sock -v &
-    GPU=" -object memory-backend-file,id=mem,size=2G,mem-path=/dev/shm,share=on -numa node,memdev=mem \
+    GPU=" -object memory-backend-file,id=mem,size=4G,mem-path=/dev/shm,share=on -numa node,memdev=mem \
  -display gtk,gl=on -nodefaults -no-user-config \
  -chardev socket,id=vgpu,path=/tmp/vgpu.sock \
  -device vhost-user-gpu-pci,chardev=vgpu"
+    PROPERTIES="properties_virgl.img"
 else
     GPU=" -display gtk -nodefaults -no-user-config \
  -device virtio-gpu-pci,xres=720,yres=1280"
+    PROPERTIES="properties.img"
 fi
 
 ARCH=`uname -m`
 if [ $ARCH == "x86_64" ]; then
-	MACHINE="pc"
+    MACHINE="pc"
 else
-	MACHINE="virt"
+    MACHINE="virt"
 fi
 
 qemu-system-${ARCH} -name guest=cvd-1,debug-threads=on \
@@ -85,7 +87,7 @@ qemu-system-${ARCH} -name guest=cvd-1,debug-threads=on \
  -device virtconsole,bus=virtio-serial9.0,chardev=hvc9 \
  -drive file=${CVD_BASE_DIR}/qemu/system.img,format=raw,snapshot=on,if=none,id=drive-virtio-disk0,aio=threads \
  -device virtio-blk-pci-non-transitional,scsi=off,drive=drive-virtio-disk0,id=virtio-disk0,bootindex=1 \
- -drive file=${CVD_BASE_DIR}/qemu/properties.img,format=raw,snapshot=on,if=none,id=drive-virtio-disk1,aio=threads \
+ -drive file=${CVD_BASE_DIR}/qemu/${PROPERTIES},format=raw,snapshot=on,if=none,id=drive-virtio-disk1,aio=threads \
  -device virtio-blk-pci-non-transitional,scsi=off,drive=drive-virtio-disk1,id=virtio-disk1 \
  -object rng-random,id=objrng0,filename=/dev/urandom \
  -device virtio-rng-pci-non-transitional,rng=objrng0,id=rng0,max-bytes=1024,period=2000 \
