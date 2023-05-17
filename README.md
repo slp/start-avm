@@ -44,16 +44,8 @@ cvd2img ..
 ``` sh
 cd ~/start-avm
 ```
-
-2. Create a tap interface to provide internet access to the VM. This interface
-   will persist until you reboot the host. You can remove it with
-   `destroy_tap.sh`:
    
-``` sh
-sudo ./create_tap.sh
-```
-   
-3. On a terminal with access to the graphics server, run `start_avm.sh`
+2. On a terminal with access to the graphics server, run `start_avm.sh`
    pointing to the cuttlefish directory.
    
 ``` sh
