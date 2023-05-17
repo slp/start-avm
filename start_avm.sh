@@ -1,18 +1,23 @@
 #!/bin/bash
 
+CONFIG_SERVER=0
 DRM=0
 MT=0
 
 function print_usage {
     echo "Usage: $0 [OPTIONS] <ANDROID_BASE_DIR>"
     echo "Options:"
+    echo "  -r          Use the real config_server instead of a stub"
     echo "  -v          Enable virgl GPU acceleration"
     echo "  -m          Use virtio-multitouch as input device"
     exit -1
 }
 
-while getopts ":vm" options; do
+while getopts ":rvm" options; do
     case "${options}" in
+        r)
+            CONFIG_SERVER=1
+            ;;
         v)
             DRM=1
             ;;
@@ -38,8 +43,16 @@ elif [ ! -e ${CVD_BASE_DIR} ]; then
     exit -1
 fi
 
+if [ $CONFIG_SERVER == 1 ]; then
+    CVD_TOOLS_OPTS="-r"
+    NETWORK="-netdev tap,id=hostnet0,ifname=cvd-mtap-01,script=no,downscript=no"
+else
+    CVD_TOOLS_OPTS=""
+    NETWORK="-netdev user,id=hostnet0"
+fi
+
 AVM_BASE_DIR=`dirname $0`
-$AVM_BASE_DIR/start_cvd_tools $CVD_BASE_DIR &
+$AVM_BASE_DIR/start_cvd_tools $CVS_TOOLS_OPTS $CVD_BASE_DIR &
 TOOLS_PID=$!
 
 if [ ! -e ${CVD_BASE_DIR}/.cuttlefish_config.json ]; then
@@ -122,7 +135,7 @@ qemu-system-${ARCH} -name guest=cvd-1,debug-threads=on \
  -device virtio-keyboard-pci,disable-legacy=on \
  -device virtio-keyboard-pci,disable-legacy=on \
  -device virtio-balloon-pci-non-transitional,id=balloon0 \
- -netdev tap,id=hostnet0,ifname=cvd-mtap-01,script=no,downscript=no \
+ $NETWORK \
  -device virtio-net-pci-non-transitional,netdev=hostnet0,id=net0,mac=00:1a:11:e0:cf:00 \
  -cpu host -msg timestamp=on \
  -device vhost-vsock-pci-non-transitional,guest-cid=3 \
