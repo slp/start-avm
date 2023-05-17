@@ -18,12 +18,17 @@
 #define BUFFER_SIZE 1024
 #define INSTANCE_DIR "/qemu/"
 
+const char CONFIG_SERVER_DATA[] = "\x0a\x35\x0a\x0c\x31\x39\x32\x2e\x31\x36\x38\x2e\x39\x37\x2e\x32\x12\x0c\x31\x39\x32\x2e\x31\x36\x38\x2e\x39\x37\x2e\x31\x1a\x07\x38\x2e\x38\x2e\x38\x2e\x38\x22\x0c\x31\x39\x32\x2e\x31\x36\x38\x2e\x39\x37\x2e\x33\x28\x1e\x12\x0b\x08\xd0\x05\x10\x80\x0a\x18\xc0\x02\x20\x3c";
+
 static char *buf;
 static char *scratch;
 
 struct environment {
 	char *base_dir;
 	char **envp;
+
+	int vsock_user;
+	int real_config_server;
 
 	int km_in;
 	int km_out;
@@ -43,14 +48,12 @@ struct environment {
 	int kevs_pipe[2];
 };
 
-int init_unix_socket(struct environment *env)
+int init_unix_socket(struct environment *env, char *path)
 {
 	struct sockaddr_un local;
 	int len;
 	int ret;
 	int fd;
-
-	snprintf(buf, BUFFER_SIZE, "%s%sconfui.sock", env->base_dir, INSTANCE_DIR);
 
 	fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	if(fd == -1) {
@@ -59,7 +62,7 @@ int init_unix_socket(struct environment *env)
 	}
 
 	local.sun_family = AF_UNIX;
-	strcpy(local.sun_path, buf);
+	strcpy(local.sun_path, path);
 	unlink(local.sun_path);
 	len = strlen(local.sun_path) + sizeof(local.sun_family);
 
@@ -113,6 +116,26 @@ int init_inet_socket(struct environment *env)
 	{
 		perror("Error listening in inet socket");
 		exit(1);
+	}
+
+	return fd;
+}
+
+int init_vsock_socket(int port)
+{
+	struct sockaddr_vm vsock;
+	int fd;
+
+	memset(&vsock, 0, sizeof(vsock));
+	vsock.svm_family = AF_VSOCK;
+	vsock.svm_cid = VMADDR_CID_ANY;
+	vsock.svm_port = port;
+
+	fd = socket(AF_VSOCK, SOCK_STREAM, 0);
+	bind(fd, (struct sockaddr *) &vsock, sizeof(vsock));
+	if (listen(fd, 4) != 0) {
+		perror("Couldn't listen on vsock\n");
+		exit(-1);
 	}
 
 	return fd;
@@ -211,35 +234,19 @@ void prepare_environment(struct environment *env, char *base_dir)
 	env->bt_out = open_fifo(env, "bt_fifo_vm.out");
 
 	env->adb_sock = init_inet_socket(env);
-	env->cu_sock = init_unix_socket(env);
 
-	memset(&vsock, 0, sizeof(vsock));
-	vsock.svm_family = AF_VSOCK;
-	vsock.svm_cid = VMADDR_CID_ANY;
-	vsock.svm_port = 9600;
+	snprintf(buf, BUFFER_SIZE, "%s%sconfui.sock", env->base_dir, INSTANCE_DIR);
+	env->cu_sock = init_unix_socket(env, buf);
 
-	vsock_fd = socket(AF_VSOCK, SOCK_STREAM, 0);
-	bind(vsock_fd, (struct sockaddr *) &vsock, sizeof(vsock));
-	if (listen(vsock_fd, 4) != 0) {
-		perror("Couldn't listen on vsock\n");
-		exit(-1);
+	if (env->vsock_user) {
+		snprintf(buf, BUFFER_SIZE, "%s%svhost-user-vsock.sock_9600", env->base_dir, INSTANCE_DIR);
+		env->ms_vsock = init_unix_socket(env, buf);
+		snprintf(buf, BUFFER_SIZE, "%s%svhost-user-vsock.sock_6800", env->base_dir, INSTANCE_DIR);
+		env->cs_vsock = init_unix_socket(env, buf);
+	} else {
+		env->ms_vsock = init_vsock_socket(9600);
+		env->cs_vsock = init_vsock_socket(6800);
 	}
-
-	env->ms_vsock = vsock_fd;
-
-	memset(&vsock, 0, sizeof(vsock));
-	vsock.svm_family = AF_VSOCK;
-	vsock.svm_cid = VMADDR_CID_ANY;
-	vsock.svm_port = 6800;
-
-	vsock_fd = socket(AF_VSOCK, SOCK_STREAM, 0);
-	bind(vsock_fd, (struct sockaddr *) &vsock, sizeof(vsock));
-	if (listen(vsock_fd, 4) != 0) {
-		perror("Couldn't listen on vsock\n");
-		exit(-1);
-	}
-
-	env->cs_vsock = vsock_fd;
 
 	pipe(env->adb_pipe);
 	pipe(env->kevs_pipe);
@@ -335,7 +342,7 @@ void start_vsock_proxy(struct environment *env)
 	execve(buf, argv, env->envp);
 }
 
-void start_config_server(struct environment *env)
+void start_config_server_real(struct environment *env)
 {
 	int arg_len = 2;
 	int arg_idx = 0;
@@ -355,6 +362,35 @@ void start_config_server(struct environment *env)
 
 	snprintf(buf, BUFFER_SIZE, "%s/bin/%s", env->base_dir, &args_base[0][0]);
 	execve(buf, argv, env->envp);
+}
+
+void start_config_server_stub(struct environment *env)
+{
+	int ret;
+	int sock;
+
+	ret = listen(env->cs_vsock, 0);
+	if (ret != 0) {
+		perror("config_server (listen)");
+		return;
+	}
+
+	while (1) {
+		sock = accept(env->cs_vsock, NULL, NULL);
+		if (sock >= 0) {
+			write(sock, CONFIG_SERVER_DATA, 68);
+			close(sock);
+		}
+	}
+}
+
+void start_config_server(struct environment *env)
+{
+	if (env->real_config_server) {
+		start_config_server_real(env);
+	} else {
+		start_config_server_stub(env);
+	}
 }
 
 void start_tcp_connector(struct environment *env)
@@ -504,6 +540,14 @@ void cleanup(int dummy) {
 	exit(0);
 }
 
+void print_usage(char **argv) {
+	printf("Usage: %s [OPTIONS] <CVD_DIR>\n\n", argv[0]);
+	printf("Options:\n");
+	printf("  -u         use vhost-user-vsock instead of vhost-vsock\n");
+	printf("  -r         use the real config_server instead of a stub\n");
+	exit(1);
+}
+
 int main(int argc, char **argv)
 {
 	void (*service[NCHILDREN])(struct environment *env) = {
@@ -514,17 +558,33 @@ int main(int argc, char **argv)
 	struct environment env;
 	pid_t child;
 	char *base_dir;
+	int vsock_user = 0;
+	int real_config_server = 0;
 	int i;
+	int c;
 
-	if (argc == 2) {
-		base_dir = argv[1];
-	} else if (argc == 1) {
-		base_dir = NULL;
-	} else {
-		printf("Usage: %s [CVD_DIR]\n", argv[0]);
-		exit(1);
+	while ((c = getopt (argc, argv, "ur")) != -1) {
+		switch (c)
+			{
+			case 'u':
+				vsock_user = 1;
+				break;
+			case 'r':
+				real_config_server = 1;
+				break;
+			default:
+				print_usage(argv);
+			}
 	}
 
+	if (optind == argc - 1) {
+		base_dir = argv[optind];
+	} else {
+		print_usage(argv);
+	}
+
+	env.vsock_user = vsock_user;
+	env.real_config_server = real_config_server;
 	prepare_environment(&env, base_dir);
 
 	signal(SIGINT, cleanup);
