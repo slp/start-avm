@@ -74,14 +74,32 @@ if [ ! -e ${CVD_BASE_DIR}/.cuttlefish_config.json ]; then
     mkdir -p ${CVD_BASE_DIR}/cuttlefish/instances/cvd-1/internal
 fi
 
+ARCH=`uname -m`
+if [ $ARCH == "x86_64" ]; then
+    MACHINE="pc"
+else
+    MACHINE="virt"
+fi
+
+QEMU=/usr/libexec/qemu-kvm
+if [ ! -x ${QEMU} ]; then
+    QEMU=qemu-system-${ARCH}
+fi
+
+if ${QEMU} -display ? | grep -q gtk; then
+    UI="gtk"
+else
+    UI="egl-headless -vnc :0"
+fi
+
 if [ $DRM == 1 ]; then
     /usr/libexec/vhost-user-gpu -s /tmp/vgpu.sock -v &
-    GPU=" -display gtk,gl=on -nodefaults -no-user-config \
+    GPU=" -display ${UI},gl=on -nodefaults -no-user-config \
  -chardev socket,id=vgpu,path=/tmp/vgpu.sock \
  -device vhost-user-gpu-pci,chardev=vgpu"
     PROPERTIES="properties_virgl.img"
 else
-    GPU=" -display gtk -nodefaults -no-user-config \
+    GPU=" -display ${UI} -nodefaults -no-user-config \
  -device virtio-gpu-pci,xres=720,yres=1280"
     PROPERTIES="properties.img"
 fi
@@ -92,14 +110,13 @@ else
     INPUT="virtio-mouse-pci"
 fi
 
-ARCH=`uname -m`
-if [ $ARCH == "x86_64" ]; then
-    MACHINE="pc"
+if ${QEMU} -device ? | grep -q AC97; then
+    AUDIO="-device AC97"
 else
-    MACHINE="virt"
+    AUDIO="-device ich9-intel-hda"
 fi
 
-qemu-system-${ARCH} -name guest=cvd-1,debug-threads=on \
+${QEMU} -name guest=cvd-1,debug-threads=on \
  -machine $MACHINE,nvdimm=on,accel=kvm,usb=off,dump-guest-core=off \
  -object memory-backend-file,id=mem,size=4G,mem-path=/dev/shm,share=on -numa node,memdev=mem \
  -m size=4096M,maxmem=4102M,slots=2 -overcommit mem-lock=off -smp 2,cores=2,threads=1 \
@@ -151,7 +168,8 @@ qemu-system-${ARCH} -name guest=cvd-1,debug-threads=on \
  -device virtio-net-pci-non-transitional,netdev=hostnet0,id=net0,mac=00:1a:11:e0:cf:00 \
  -cpu host -msg timestamp=on \
  $VSOCK \
- -device AC97 -device qemu-xhci,id=xhci \
+ $AUDIO \
+ -device qemu-xhci,id=xhci \
  -bios ${CVD_BASE_DIR}/etc/bootloader_${ARCH}/bootloader.qemu
 
 kill $TOOLS_PID
