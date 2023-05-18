@@ -15,6 +15,7 @@
 #include <linux/vm_sockets.h>
 #include <netinet/in.h>
 
+#define SOCK_BUF_SIZE 4096
 #define BUFFER_SIZE 1024
 #define INSTANCE_DIR "/qemu/"
 
@@ -239,9 +240,9 @@ void prepare_environment(struct environment *env, char *base_dir)
 	env->cu_sock = init_unix_socket(env, buf);
 
 	if (env->vsock_user) {
-		snprintf(buf, BUFFER_SIZE, "%s%svhost-user-vsock.sock_9600", env->base_dir, INSTANCE_DIR);
+		snprintf(buf, BUFFER_SIZE, "%s%svhost-user-vsock.uds_9600", env->base_dir, INSTANCE_DIR);
 		env->ms_vsock = init_unix_socket(env, buf);
-		snprintf(buf, BUFFER_SIZE, "%s%svhost-user-vsock.sock_6800", env->base_dir, INSTANCE_DIR);
+		snprintf(buf, BUFFER_SIZE, "%s%svhost-user-vsock.uds_6800", env->base_dir, INSTANCE_DIR);
 		env->cs_vsock = init_unix_socket(env, buf);
 	} else {
 		env->ms_vsock = init_vsock_socket(9600);
@@ -313,7 +314,111 @@ void start_adb_connector(struct environment *env)
 	execve(buf, &argv[0], env->envp);
 }
 
-void start_vsock_proxy(struct environment *env)
+void uds_tcp_proxy(struct environment *env)
+{
+	struct sockaddr_un local;
+	fd_set fds;
+	char idata[SOCK_BUF_SIZE];
+	char udata[SOCK_BUF_SIZE];
+	int idata_len = 0;
+	int udata_len = 0;
+	int last_fd;
+	int isock;
+	int usock;
+	int ret;
+	int len;
+	int n;
+
+	isock = accept(env->adb_sock, NULL, NULL);
+	if (isock < 0) {
+		perror("vsock_proxy: error accepting inet");
+		return;
+	}
+
+	usock = socket(AF_UNIX, SOCK_STREAM, 0);
+	if(usock == -1) {
+		perror("vsock_proxy: error creating unix socket");
+		return;
+	}
+	local.sun_family = AF_UNIX;
+	snprintf(buf, BUFFER_SIZE, "%s%svhost-user-vsock.uds", env->base_dir, INSTANCE_DIR);
+	strcpy(local.sun_path, buf);
+	len = strlen(local.sun_path) + sizeof(local.sun_family);
+	ret = connect(usock, (struct sockaddr *) &local, len);
+	if (ret != 0) {
+		perror("Error connecting to UDS backend");
+		close(isock);
+		return;
+	}
+	write(usock, "CONNECT 5555\n", 13);
+	n = read(usock, &buf, 8);
+	if (n != 8 || memcmp(&buf, "OK 5555\n", 8) != 0) {
+		printf("Invalid answer to CONNECT\n");
+		close(isock);
+		close(usock);
+		return;
+	}
+
+	last_fd = isock > usock ? isock : usock;
+
+	while (1) {
+		if (idata_len) {
+			n = write(usock, &idata[0], idata_len);
+			idata_len -= n;
+		}
+		if (udata_len) {
+			n = write(isock, &udata[0], udata_len);
+			udata_len -= n;
+		}
+
+		FD_ZERO(&fds);
+
+		if (idata_len < SOCK_BUF_SIZE) {
+			FD_SET(isock, &fds);
+		}
+		if (udata_len < SOCK_BUF_SIZE) {
+			FD_SET(usock, &fds);
+		}
+
+		ret = select(last_fd + 1, &fds, 0, 0, NULL);
+		if (ret <= 0) {
+			perror("vsock_proxy: error in select");
+			break;
+		}
+
+		if (FD_ISSET(isock, &fds)) {
+			n = read(isock, &idata[idata_len], SOCK_BUF_SIZE - idata_len);
+			if (n > 0) {
+				idata_len += n;
+			} else {
+				perror("vsock_proxy: error reading from isock");
+				break;
+			}
+		}
+
+		if (FD_ISSET(usock, &fds)) {
+			n = read(usock, &udata[udata_len], SOCK_BUF_SIZE - udata_len);
+			if (n > 0) {
+				udata_len += n;
+			} else {
+				perror("vsock_proxy: error reading from usock");
+				break;
+			}
+		}
+	}
+
+	close(usock);
+	close(isock);
+}
+
+void start_vsock_proxy_stub(struct environment *env)
+{
+	while (1) {
+		uds_tcp_proxy(env);
+	}
+}
+
+void start_vsock_proxy_real(struct environment *env)
 {
 	int arg_len = 9;
 	int arg_idx = 0;
@@ -340,6 +445,15 @@ void start_vsock_proxy(struct environment *env)
 
 	snprintf(buf, BUFFER_SIZE, "%s/bin/%s", env->base_dir, &args_base[0][0]);
 	execve(buf, argv, env->envp);
+}
+
+void start_vsock_proxy(struct environment *env)
+{
+	if (env->vsock_user) {
+		start_vsock_proxy_stub(env);
+	} else {
+		start_vsock_proxy_real(env);
+	}
 }
 
 void start_config_server_real(struct environment *env)
