@@ -37,7 +37,7 @@ cd qemu
 cvd2img ..
 ```
 
-### Starting the VM
+### Option 1: Starting the VM directly on host
 
 1. Go to the directory containing the `start-avm` repository.
 
@@ -52,5 +52,25 @@ cd ~/start-avm
 ./start_avm.sh ~/cuttlefish
 ```
 
-A QEMU window will appear, and in a few seconds the Android boot animation
-should show up.
+### Option 2: Starting the VM as a container with podman
+
+1. Go to the directory containing the `start-avm` repository.
+
+``` sh
+cd ~/start-avm
+```
+
+2. On a terminal with access to the graphics server, run `run_podman.sh`
+   pointing to the cuttlefish directory.
+
+``` sh
+./run_podman.sh ~/cuttlefish
+```
+
+### Using virgl acceleration and multi-touch support
+
+If you're on a device with hardware capable of generating multi-touch
+events, you can enable both multi-touch support and virgl acceleration
+(which depends on multi-touch support due to cuttlefish limitations) by
+passing the `-m` and `-v` options to either `start_avm.sh` or
+`run_podman.sh`.
