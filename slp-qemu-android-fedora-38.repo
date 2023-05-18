@@ -1,0 +1,10 @@
+[copr:copr.fedorainfracloud.org:slp:qemu-android]
+name=Copr repo for qemu-android owned by slp
+baseurl=https://download.copr.fedorainfracloud.org/results/slp/qemu-android/fedora-$releasever-$basearch/
+type=rpm-md
+skip_if_unavailable=True
+gpgcheck=1
+gpgkey=https://download.copr.fedorainfracloud.org/results/slp/qemu-android/pubkey.gpg
+repo_gpgcheck=0
+enabled=1
+enabled_metadata=1
