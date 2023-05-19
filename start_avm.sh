@@ -56,7 +56,7 @@ else
     NETWORK="-netdev user,id=hostnet0"
 fi
 if [ $VHOST_USER == 1 ]; then
-    /usr/libexec/vhost-user-vsock --socket ${CVD_BASE_DIR}/qemu/vhost-user-vsock.sock --uds-path ${CVD_BASE_DIR}/qemu/vhost-user-vsock.uds &
+    /usr/bin/vhost-user-vsock --socket ${CVD_BASE_DIR}/qemu/vhost-user-vsock.sock --uds-path ${CVD_BASE_DIR}/qemu/vhost-user-vsock.uds &
     CVD_TOOLS_OPTS="$CVD_TOOLS_OPTS -u"
     VSOCK="-chardev socket,id=char0,reconnect=0,path=${CVD_BASE_DIR}/qemu/vhost-user-vsock.sock -device vhost-user-vsock-pci,chardev=char0"
 else
