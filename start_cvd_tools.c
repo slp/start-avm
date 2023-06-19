@@ -35,6 +35,11 @@ struct environment {
 	int km_out;
 	int gk_in;
 	int gk_out;
+	int ol_in;
+	int ol_out;
+	int kt_in;
+	int kt_out;
+
 	int kn_in;
 	int lc_in;
 	int bt_in;
@@ -229,6 +234,11 @@ void prepare_environment(struct environment *env, char *base_dir)
 	env->km_out = open_fifo(env, "keymaster_fifo_vm.out");
 	env->gk_in = open_fifo(env, "gatekeeper_fifo_vm.in");
 	env->gk_out = open_fifo(env, "gatekeeper_fifo_vm.out");
+	env->ol_in = open_fifo(env, "oemlock_fifo_vm.in");
+	env->ol_out = open_fifo(env, "oemlock_fifo_vm.out");
+	env->kt_in = open_fifo(env, "keymint_fifo_vm.in");
+	env->kt_out = open_fifo(env, "keymint_fifo_vm.out");
+
 	env->kn_in = open_fifo(env, "kernel-log-pipe");
 	env->lc_in = open_fifo(env, "logcat-pipe");
 	env->bt_in = open_fifo(env, "bt_fifo_vm.in");
@@ -294,6 +304,18 @@ int add_fd_arg(int arg_idx, char *fmt, int fd, char **argv)
 	int len;
 
 	snprintf(buf, BUFFER_SIZE, fmt, fd);
+	len = strlen(buf) + 1;
+	argv[arg_idx] = malloc(len);
+	strncpy(argv[arg_idx], buf, len);
+
+	return arg_idx + 1;
+}
+
+int add_fd_arg2(int arg_idx, char *fmt, int fd, int fd2, char **argv)
+{
+	int len;
+
+	snprintf(buf, BUFFER_SIZE, fmt, fd, fd2);
 	len = strlen(buf) + 1;
 	argv[arg_idx] = malloc(len);
 	strncpy(argv[arg_idx], buf, len);
@@ -547,7 +569,8 @@ void start_kernel_monitor(struct environment *env)
 
 	arg_idx = add_base_args(arg_idx, args_base, argv);
 	arg_idx = add_fd_arg(arg_idx, "-log_pipe_fd=%d", env->kn_in, argv);
-	arg_idx = add_fd_arg(arg_idx, "-subscriber_fds=%d,%d", env->adb_pipe[1], argv);
+	arg_idx = add_fd_arg2(arg_idx, "-subscriber_fds=%d,%d,%d", env->adb_pipe[1],
+						  env->kevs_pipe[1], argv);
 
 	assert(arg_idx == arg_len);
 
@@ -577,13 +600,14 @@ void start_logcat_receiver(struct environment *env)
 
 void start_secure_env(struct environment *env)
 {
-	int arg_len = 9;
+	int arg_len = 14;
 	int arg_idx = 0;
 	char **argv;
 	char args_base[][32] = {
 		"secure_env\0",
-		"-keymint_impl=rust-tpm\0",
+		"-keymint_impl=tpm\0",
 		"-gatekeeper_impl=tpm\0",
+		"-oemlock_impl=software\0",
 		0,
 	};
 
@@ -595,6 +619,10 @@ void start_secure_env(struct environment *env)
 	arg_idx = add_fd_arg(arg_idx, "-keymaster_fd_out=%d", env->km_in, argv);
 	arg_idx = add_fd_arg(arg_idx, "-gatekeeper_fd_in=%d", env->gk_out, argv);
 	arg_idx = add_fd_arg(arg_idx, "-gatekeeper_fd_out=%d", env->gk_in, argv);
+	arg_idx = add_fd_arg(arg_idx, "-oemlock_fd_in=%d", env->ol_out, argv);
+	arg_idx = add_fd_arg(arg_idx, "-oemlock_fd_out=%d", env->ol_in, argv);
+	arg_idx = add_fd_arg(arg_idx, "-keymint_fd_in=%d", env->kt_out, argv);
+	arg_idx = add_fd_arg(arg_idx, "-keymint_fd_out=%d", env->kt_in, argv);
 	arg_idx = add_fd_arg(arg_idx, "-kernel_events_fd=%d", env->kevs_pipe[0], argv);
 	arg_idx = add_fd_arg(arg_idx, "-confui_server_fd=%d", env->cu_sock, argv);
 

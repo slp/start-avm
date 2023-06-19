@@ -154,6 +154,12 @@ ${QEMU} -name guest=cvd-1,debug-threads=on \
  -chardev null,id=hvc9 \
  -device virtio-serial-pci-non-transitional,max_ports=1,id=virtio-serial9 \
  -device virtconsole,bus=virtio-serial9.0,chardev=hvc9 \
+ -chardev pipe,id=hvc10,path=${CVD_BASE_DIR}/qemu/oemlock_fifo_vm \
+ -device virtio-serial-pci-non-transitional,max_ports=1,id=virtio-serial10 \
+ -device virtconsole,bus=virtio-serial10.0,chardev=hvc10 \
+ -chardev pipe,id=hvc11,path=${CVD_BASE_DIR}/qemu/keymint_fifo_vm \
+ -device virtio-serial-pci-non-transitional,max_ports=1,id=virtio-serial11 \
+ -device virtconsole,bus=virtio-serial11.0,chardev=hvc11 \
  -drive file=${CVD_BASE_DIR}/qemu/system.img,format=raw,snapshot=on,if=none,id=drive-virtio-disk0,aio=threads \
  -device virtio-blk-pci-non-transitional,scsi=off,drive=drive-virtio-disk0,id=virtio-disk0,bootindex=1 \
  -drive file=${CVD_BASE_DIR}/qemu/${PROPERTIES},format=raw,snapshot=on,if=none,id=drive-virtio-disk1,aio=threads \
