@@ -86,7 +86,9 @@ if [ ! -x ${QEMU} ]; then
     QEMU=qemu-system-${ARCH}
 fi
 
-if ${QEMU} -display ? | grep -q gtk; then
+if ${QEMU} -display ? | grep -q dbus; then
+    UI="dbus"
+elif ${QEMU} -display ? | grep -q gtk; then
     UI="gtk"
 else
     UI="egl-headless -vnc :0"
