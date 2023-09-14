@@ -12,10 +12,11 @@ function print_usage {
     echo "  -u          Use vhost-user-vsock instead of vhost-vsock"
     echo "  -v          Enable virgl GPU acceleration"
     echo "  -m          Use virtio-multitouch as input device"
+    echo "  -d          Display debug messages and commands as they are executed"
     exit -1
 }
 
-while getopts ":ruvm" options; do
+while getopts ":ruvmd" options; do
     case "${options}" in
         r)
             CONFIG_SERVER=1
@@ -29,6 +30,9 @@ while getopts ":ruvm" options; do
         m)
             MT=1
             ;;
+        d)
+            DEBUG=1
+            ;;
         :)
             echo "Error: -${OPTARG} requires an argument."
             print_usage
@@ -38,6 +42,8 @@ while getopts ":ruvm" options; do
             ;;
     esac
 done
+
+[ $DEBUG == 1 ] && set -x
 
 CVD_BASE_DIR=${@:$OPTIND:1}
 
