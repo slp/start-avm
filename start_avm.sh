@@ -12,10 +12,11 @@ function print_usage {
     echo "  -u          Use vhost-user-vsock instead of vhost-vsock"
     echo "  -v          Enable virgl GPU acceleration"
     echo "  -m          Use virtio-multitouch as input device"
+    echo "  -d          Display debug messages and commands as they are executed"
     exit -1
 }
 
-while getopts ":ruvm" options; do
+while getopts ":ruvmd" options; do
     case "${options}" in
         r)
             CONFIG_SERVER=1
@@ -29,6 +30,9 @@ while getopts ":ruvm" options; do
         m)
             MT=1
             ;;
+        d)
+            DEBUG=1
+            ;;
         :)
             echo "Error: -${OPTARG} requires an argument."
             print_usage
@@ -38,6 +42,8 @@ while getopts ":ruvm" options; do
             ;;
     esac
 done
+
+[ $DEBUG == 1 ] && set -x
 
 CVD_BASE_DIR=${@:$OPTIND:1}
 
@@ -56,7 +62,12 @@ else
     NETWORK="-netdev user,id=hostnet0"
 fi
 if [ $VHOST_USER == 1 ]; then
-    /usr/bin/vhost-user-vsock --socket ${CVD_BASE_DIR}/qemu/vhost-user-vsock.sock --uds-path ${CVD_BASE_DIR}/qemu/vhost-user-vsock.uds &
+    VSOCK_PATH="/usr/bin/vhost-user-vsock"
+    if [ ! -f "$VSOCK_PATH" ]; then
+        echo "ERROR: vhost-user-vsock binary not found"
+        exit 1
+    fi
+    $VSOCK_PATH --socket ${CVD_BASE_DIR}/qemu/vhost-user-vsock.sock --uds-path ${CVD_BASE_DIR}/qemu/vhost-user-vsock.uds &
     CVD_TOOLS_OPTS="$CVD_TOOLS_OPTS -u"
     VSOCK="-chardev socket,id=char0,reconnect=0,path=${CVD_BASE_DIR}/qemu/vhost-user-vsock.sock -device vhost-user-vsock-pci,chardev=char0"
 else
