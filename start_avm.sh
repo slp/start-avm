@@ -5,19 +5,21 @@ VHOST_USER=0
 DRM=0
 MT=0
 DEBUG=0
+MODE=AUTO
 
 function print_usage {
     echo "Usage: $0 [OPTIONS] <ANDROID_BASE_DIR>"
     echo "Options:"
-    echo "  -r          Use the real config_server instead of a stub"
-    echo "  -u          Use vhost-user-vsock instead of vhost-vsock"
-    echo "  -v          Enable virgl GPU acceleration"
-    echo "  -m          Use virtio-multitouch as input device"
-    echo "  -d          Display debug messages and commands as they are executed"
+    echo "  -r                       Use the real config_server instead of a stub"
+    echo "  -u                       Use vhost-user-vsock instead of vhost-vsock"
+    echo "  -v                       Enable virgl GPU acceleration"
+    echo "  -d                       Display debug messages and commands as they are executed"
+    echo "  --mt                     Use virtio-multitouch as input device"
+    echo "  -m,--mode [PHONE|AUTO]   Use Android Phone/Automotive display settings (default: AUTO)"
     exit -1
 }
 
-options=$(getopt -o ruvmdh --long help -n "$0" -- "$@")
+options=$(getopt -o ruvm:dh --long help,mt,mode: -n "$0" -- "$@")
 if [ "$?" != 0 ]; then
     print_usage
 fi
@@ -34,7 +36,7 @@ while :; do
         -v)
             DRM=1
             ;;
-        -m)
+        --mt)
             MT=1
             ;;
         -d)
@@ -42,6 +44,14 @@ while :; do
             ;;
         -h | --help)
             print_usage
+            ;;
+        -m | --mode)
+            MODE=${2^^}
+            if [ $MODE != "PHONE" -a $MODE != "AUTO" ]; then
+                echo "Error: Invalid mode (${MODE})"
+                print_usage
+            fi
+            shift
             ;;
         --)
             shift
@@ -118,15 +128,24 @@ else
     UI="egl-headless -vnc :0"
 fi
 
+if [ $MODE = "PHONE" ]; then
+    GPU_DEV_OPTS="xres=720,yres=1280"
+else
+    GPU_DEV_OPTS="xres=2560,yres=1440,max_outputs=2"
+fi
+
 if [ $DRM == 1 ]; then
-    /usr/libexec/vhost-user-gpu -s /tmp/vgpu.sock -v &
+    DRM_SOCKET=/tmp/vgpu.sock
+    CHARDEV_ID=vgpu
+    GPU_DEV_OPTS="${GPU_DEV_OPTS},chardev=${CHARDEV_ID}"
+    /usr/libexec/vhost-user-gpu -s $DRM_SOCKET -v &
     GPU=" -display ${UI},gl=on -nodefaults -no-user-config \
- -chardev socket,id=vgpu,path=/tmp/vgpu.sock \
- -device vhost-user-gpu-pci,chardev=vgpu"
+ -chardev socket,id=${CHARDEV_ID},path=${DRM_SOCKET} \
+ -device vhost-user-gpu-pci,${GPU_DEV_OPTS}"
     PROPERTIES="properties_virgl.img"
 else
     GPU=" -display ${UI} -nodefaults -no-user-config \
- -device virtio-gpu-pci,xres=720,yres=1280"
+ -device virtio-gpu-pci,${GPU_DEV_OPTS}"
     PROPERTIES="properties.img"
 fi
 
