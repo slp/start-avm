@@ -6,6 +6,7 @@ DRM=0
 MT=0
 DEBUG=0
 MODE=AUTO
+QEMU_PATH=""
 
 function print_usage {
     echo "Usage: $0 [OPTIONS] <ANDROID_BASE_DIR>"
@@ -16,10 +17,11 @@ function print_usage {
     echo "  -d                       Display debug messages and commands as they are executed"
     echo "  --mt                     Use virtio-multitouch as input device"
     echo "  -m,--mode [PHONE|AUTO]   Use Android Phone/Automotive display settings (default: AUTO)"
+    echo "  -q,--qemu                Path to the Qemu build folder instead of the automatic search"
     exit -1
 }
 
-options=$(getopt -o ruvm:dh --long help,mt,mode: -n "$0" -- "$@")
+options=$(getopt -o ruvm:dhq: --long help,mt,mode:,qemu: -n "$0" -- "$@")
 if [ "$?" != 0 ]; then
     print_usage
 fi
@@ -51,6 +53,10 @@ while :; do
                 echo "Error: Invalid mode (${MODE})"
                 print_usage
             fi
+            shift
+            ;;
+        -q | --qemu)
+            QEMU_PATH=$2
             shift
             ;;
         --)
@@ -116,6 +122,9 @@ else
 fi
 
 QEMU=/usr/libexec/qemu-kvm
+if [ ! -z "$QEMU_PATH" ]; then
+    QEMU="${QEMU_PATH}/qemu-system-${ARCH}"
+fi
 if [ ! -x ${QEMU} ]; then
     QEMU=qemu-system-${ARCH}
 fi
@@ -138,7 +147,11 @@ if [ $DRM == 1 ]; then
     DRM_SOCKET=/tmp/vgpu.sock
     CHARDEV_ID=vgpu
     GPU_DEV_OPTS="${GPU_DEV_OPTS},chardev=${CHARDEV_ID}"
-    /usr/libexec/vhost-user-gpu -s $DRM_SOCKET -v &
+    VHOST_GPU_PATH=/usr/libexec
+    if [ ! -z "$QEMU_PATH" ]; then
+        VHOST_GPU_PATH="${QEMU_PATH}/contrib/vhost-user-gpu"
+    fi
+    ${VHOST_GPU_PATH}/vhost-user-gpu -s /tmp/vgpu.sock -v &
     GPU=" -display ${UI},gl=on -nodefaults -no-user-config \
  -chardev socket,id=${CHARDEV_ID},path=${DRM_SOCKET} \
  -device vhost-user-gpu-pci,${GPU_DEV_OPTS}"
