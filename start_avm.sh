@@ -2,6 +2,7 @@
 
 CONFIG_SERVER=0
 VHOST_USER=0
+VHOST_VIDEO=0
 DRM=0
 MT=0
 DEBUG=0
@@ -16,12 +17,13 @@ function print_usage {
     echo "  -v                       Enable virgl GPU acceleration"
     echo "  -d                       Display debug messages and commands as they are executed"
     echo "  --mt                     Use virtio-multitouch as input device"
+    echo "  --video                  Enable vhost-user-video device (experimental)"
     echo "  -m,--mode [PHONE|AUTO]   Use Android Phone/Automotive display settings (default: AUTO)"
     echo "  -q,--qemu                Path to the Qemu build folder instead of the automatic search"
     exit -1
 }
 
-options=$(getopt -o ruvm:dhq: --long help,mt,mode:,qemu: -n "$0" -- "$@")
+options=$(getopt -o ruvm:dhq: --long help,mt,mode:,qemu:,video -n "$0" -- "$@")
 if [ "$?" != 0 ]; then
     print_usage
 fi
@@ -34,6 +36,9 @@ while :; do
             ;;
         -u)
             VHOST_USER=1
+            ;;
+        --video)
+            VHOST_VIDEO=1
             ;;
         -v)
             DRM=1
@@ -101,6 +106,12 @@ if [ $VHOST_USER == 1 ]; then
     VSOCK="-chardev socket,id=char0,reconnect=0,path=${CVD_BASE_DIR}/qemu/vhost-user-vsock.sock -device vhost-user-vsock-pci,chardev=char0"
 else
     VSOCK="-device vhost-vsock-pci-non-transitional,guest-cid=3"
+fi
+if [ $VHOST_VIDEO == 1 ]; then
+    # Adds video device to Qemu command line, the vhost backend must be run separately
+    # The 'vhost-user-video-pci' device only exists in out-of-tree Qemu
+    VIDEO="  -device vhost-user-video-pci,chardev=video,id=video \
+  -chardev socket,path=/tmp/video.sock,id=video"
 fi
 
 AVM_BASE_DIR=`dirname $0`
@@ -233,6 +244,7 @@ ${QEMU} -name guest=cvd-1,debug-threads=on \
  -cpu host -msg timestamp=on \
  $VSOCK \
  $AUDIO \
+ $VIDEO \
  -device qemu-xhci,id=xhci \
  -bios ${CVD_BASE_DIR}/etc/bootloader_${ARCH}/bootloader.qemu
 
