@@ -4,6 +4,7 @@ CONFIG_SERVER=0
 VHOST_USER=0
 DRM=0
 MT=0
+DEBUG=0
 
 function print_usage {
     echo "Usage: $0 [OPTIONS] <ANDROID_BASE_DIR>"
@@ -16,32 +17,44 @@ function print_usage {
     exit -1
 }
 
-while getopts ":ruvmd" options; do
-    case "${options}" in
-        r)
+options=$(getopt -o ruvmdh --long help -n "$0" -- "$@")
+if [ "$?" != 0 ]; then
+    print_usage
+fi
+eval set -- "${options}"
+
+while :; do
+    case "${1}" in
+        -r)
             CONFIG_SERVER=1
             ;;
-        u)
+        -u)
             VHOST_USER=1
             ;;
-        v)
+        -v)
             DRM=1
             ;;
-        m)
+        -m)
             MT=1
             ;;
-        d)
+        -d)
             DEBUG=1
             ;;
-        :)
-            echo "Error: -${OPTARG} requires an argument."
+        -h | --help)
             print_usage
             ;;
-        *)
-            print_usage
+        --)
+            shift
+            break
             ;;
     esac
+    shift
 done
+
+if [ -z "$1" ]; then
+    echo "Error: Missing mandatory fields"
+    print_usage
+fi
 
 [ $DEBUG == 1 ] && set -x
 
