@@ -237,7 +237,6 @@ ${QEMU} -name guest=cvd-1,debug-threads=on \
  -device virtio-rng-pci-non-transitional,rng=objrng0,id=rng0,max-bytes=1024,period=2000 \
  -device ${INPUT},disable-legacy=on \
  -device virtio-keyboard-pci,disable-legacy=on \
- -device virtio-keyboard-pci,disable-legacy=on \
  -device virtio-balloon-pci-non-transitional,id=balloon0 \
  $NETWORK \
  -device virtio-net-pci-non-transitional,netdev=hostnet0,id=net0,mac=00:1a:11:e0:cf:00 \
