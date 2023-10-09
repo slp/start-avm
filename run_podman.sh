@@ -38,8 +38,8 @@ elif [ ! -e ${CVD_BASE_DIR} ]; then
     exit -1
 fi
 
-if [ -z "$WAYLAND_DISPLAY" ]; then
-    echo "Can't find WAYLAND_DISPLAY in this session"
+if [ -z "$WAYLAND_DISPLAY" ] && [ -z "$DISPLAY" ]; then
+    echo "Can't find WAYLAND_DISPLAY or DISPLAY in this session"
     exit -1
 fi
 
@@ -61,7 +61,8 @@ podman run -ti --rm --privileged \
  -v /run/user/1000/:/run/user/1000/ \
  $ENVS \
  -e XDG_RUNTIME_DIR=/run/user/1000 \
- -e WAYLAND_DISPLAY=$WAYLAND_DISPLAY \
+ -e WAYLAND_DISPLAY="$WAYLAND_DISPLAY" \
+ -e DISPLAY="$DISPLAY" \
  -e PULSE_SERVER=/run/user/1000/pulse/native \
  \
  --shm-size=5g \
