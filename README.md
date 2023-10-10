@@ -74,3 +74,23 @@ events, you can enable both multi-touch support and virgl acceleration
 (which depends on multi-touch support due to cuttlefish limitations) by
 passing the `-m` and `-v` options to either `start_avm.sh` or
 `run_podman.sh`.
+
+## Troubleshooting
+
+### Broken config file
+
+If you get messages about syntax errors in `.cuttlefish_config.json` config file then:
+
+- Remove the file.
+- Run start\_avm.sh (or run\_podman.sh) twice.
+
+### Outdated container image
+
+If run\_podman.sh doesn't work, it may be because of an outdated container image on Quay.
+To rebuild the image locally, run:
+
+```
+podman build -t qemu-android .
+```
+
+in `start-avm` directory.
