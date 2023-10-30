@@ -193,6 +193,11 @@ if ${QEMU} -device ? | grep -q AC97; then
 else
     AUDIO="-device ich9-intel-hda"
 fi
+if ${QEMU} -audio ? | grep -q pipewire; then
+    AUDIO="${AUDIO} -audio pipewire"
+else
+    AUDIO="${AUDIO} -audio none"
+fi
 
 ${QEMU} -name guest=cvd-1,debug-threads=on \
  -machine $MACHINE,nvdimm=on,accel=kvm,usb=off,dump-guest-core=off \
