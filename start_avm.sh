@@ -6,6 +6,7 @@ VHOST_VIDEO=0
 DRM=0
 MT=0
 DEBUG=0
+ROTARY=0
 MODE=AUTO
 QEMU_PATH=""
 
@@ -18,12 +19,13 @@ function print_usage {
     echo "  -d                       Display debug messages and commands as they are executed"
     echo "  --mt                     Use virtio-multitouch as input device"
     echo "  --video                  Enable vhost-user-video device (experimental)"
+    echo "  --rotary                 Add virtio-rotary as input device"
     echo "  -m,--mode [PHONE|AUTO]   Use Android Phone/Automotive display settings (default: AUTO)"
     echo "  -q,--qemu                Path to the Qemu build folder instead of the automatic search"
     exit -1
 }
 
-options=$(getopt -o ruvm:dhq: --long help,mt,mode:,qemu:,video -n "$0" -- "$@")
+options=$(getopt -o ruvm:dhq: --long help,mt,mode:,qemu:,video,rotary -n "$0" -- "$@")
 if [ "$?" != 0 ]; then
     print_usage
 fi
@@ -45,6 +47,9 @@ while :; do
             ;;
         --mt)
             MT=1
+            ;;
+        --rotary)
+            ROTARY=1
             ;;
         -d)
             DEBUG=1
@@ -179,10 +184,19 @@ else
     INPUT="virtio-mouse-pci"
 fi
 
+if [ $ROTARY == 1 ]; then
+    ROTARY_INPUT="-device virtio-rotary-pci,disable-legacy=on"
+fi
+
 if ${QEMU} -device ? | grep -q AC97; then
     AUDIO="-device AC97"
 else
     AUDIO="-device ich9-intel-hda"
+fi
+if ${QEMU} -audio ? | grep -q pipewire; then
+    AUDIO="${AUDIO} -audio pipewire"
+else
+    AUDIO="${AUDIO} -audio none"
 fi
 
 ${QEMU} -name guest=cvd-1,debug-threads=on \
@@ -238,6 +252,7 @@ ${QEMU} -name guest=cvd-1,debug-threads=on \
  -device ${INPUT},disable-legacy=on \
  -device virtio-keyboard-pci,disable-legacy=on \
  -device virtio-balloon-pci-non-transitional,id=balloon0 \
+ $ROTARY_INPUT \
  $NETWORK \
  -device virtio-net-pci-non-transitional,netdev=hostnet0,id=net0,mac=00:1a:11:e0:cf:00 \
  -cpu host -msg timestamp=on \
